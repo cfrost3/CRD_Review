@@ -1,0 +1,933 @@
+---
+title: "Evaluation of the Pacific Flyway Council's Copper River Delta Dusky Canada Goose Survey and Management Index"
+author: "Charles Frost and Erik Osnas"
+date: "`r Sys.Date()`"
+output:  
+  pdf_document:  
+    fig_caption:  true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE)
+options(knitr.kable.NA = '')
+library(AKaerial)
+library(mgcv)
+library(dplyr)
+library(bbmle)
+library(ggplot2)
+library(sf)
+library(rgdal)
+library(ggpubr)
+```
+
+
+This document was produced using the R package `knitr` (citation) and an Rmarkdown text file. We have briefly summarized methods used to produce results, but the original Rmarkdown file should be consulted for specific method details, R code, and to reproduce or modify results presented here. This document, Rmarkdown file, and the data used in this report can be found at [https://doi.org/10.7499/xxxxxxxx](https://doi.org/10.7499/xxxxxxxx).  
+
+Suggested Citation:  
+Frost, C., and E. Osnas. 2021. Evaluation of the Pacific Flyway Council's Copper River Delta Dusky Canada Goose Survey and Management Index. United States Fish and Wildlife Service, Division of Migratory Bird Management, Anchorage, Alaska. [https://doi.org/10.7499/xxxxxxxx](https://doi.org/10.7499/xxxxxxxx)  
+
+\newpage
+# 1. Management index
+
+The Dusky Canada Goose management index is defined as (Pacific Flyway Council 2015) 
+$$\bar I_t = \frac{1}{3} \sum_{i=0}^{2} I_{t-i}, $$
+with $I_t$ defined as 
+$$I_t = 2(S_t + P_t)\frac{\hat\beta}{DR}+F_t+M_t.$$
+$S_t$ and $P_t$ are the estimated number of singles and pairs, respectively, in the study area in year $t$ based on an aerial survey; $\hat\beta$ is an estimate of the linear slope between nests estimated on the ground and singles and pairs estimated from the aerial survey (described more below), $D$ is a detection rate of nests estimated in 1998; $R$ is an estimate of the total number of nests built by a breeding pair; $F_t$ is the estimated number of birds found in flocks at $t$; $M_t$ is the number of adult birds counted periodically (before 2015 about every other year) or survey estimates of the number of nests (2015-present) on Middelton Island. The linear slope parameter, $\hat\beta$, is estimated from a no-intercept linear regression with data pooled across years, $T \in \{1993, 1994, 1995, 1998, 2004, 2007 \}$ and where air ($x$) and nest ($y$) estimates are calculated for each year in $T$ in each nest plot strata, $s$ 
+$$\hat{\beta}=\frac{\sum_{t \in T} \sum_s x_{ts}y_{ts}}{\sum_{t \in T}\sum_s (x_{ts}^2)}.$$
+$D$ is estimated from a mark-resight study on 30 nests conducted in 1998 (Youkey 1998 and see below), and $R$ is based on results from a complicated combination of nest survey estimates, observations during an egg-removal experiment on marked birds, two different model-selection results, and an individual-based simulation model (Fondell et al. 2006), although it is unclear how the results reported in Fondell (2006, Table 3) are translated to what is used in the management index. Note that, $\hat\beta / DR$ is a constant over years. Note that $\hat \beta$ is estimated from the regression based on stratum-specific nest and air estimates but then applied to the population total over all strata.  
+
+Variance of the annual component of the management index $I_t$ is calculated and reported but not directly used for management. Variance and point estimates for $S$, $P$, and $F$ are calculated based on standard design-based methods for a ratio estimator (Thompson 2012) using the R package AKaerial (Frost 2020). Presumably, the variance of $R$ is from Fondell et al (2006) but it is unclear how this is calculated. Variance of $D$ is calculated from the original data as reported in Youkey (1998) by the USFWS (G. Zimmerman, *pers. comm.*) using undocumented methods (the calculation is repeated below). Variance of $\hat\beta$ is based on the variance of a ratio estimator (Thompson 2012, p. 95) after ignoring the finite population correction (Hodges and Eldridge 2007), 
+$$Var(\hat\beta) = \frac{\sum_i{(y_i-\hat\beta x_i)^2}}{n(n-1) \bar{x}^2}.$$
+It is unclear if the estimated regression slope or the ratio of means ($\sum y/\sum x$) is used for $\hat\beta$ in the variance equation, but it is assumed that the linear regression slope is used. This estimate of the variance of the slope seems clearly wrong, as the variance of the slope parameter in a regression model through the origin should be used if this is how the parameter was estimated (Thompson 2012, p. 106). While these can lead to similar estimates of variance, and they do in the present case, they can differ. More importantly, the standard error of the regression slope, $\sqrt{Var(\hat\beta)}$, is used together with the total aerial estimate of singles plus pairs, $S_t + P_t$, and not the strata-specific estimates that were used in the regression. Because the variance of the expected response, $\hat{\beta} x_i = \hat y_i$, or the prediction interval for a new response, $y_i$, in a linear regression increases as $x_i$ increases away from the mean $\bar x$ or away from zero in an no-intercept model as is used here, the current use of the air to ground ratio does not seem to correctly propagate variance of the predicted response. We expand on the use of the regression estimate, ratio estimate, and the appropriate variance propagation in section 4.  
+
+Finally, the variance of $M_t$ was assumed to be zero before 2015, including variance due to imputation of missing data during years when no survey was completed. Since 2015, it is unclear how nest estimates are handled or if variance of the estimate is added to the index variance. Because no variance estimate is reported in Marks (2019), it is assumed that it is not used or assumed to be zero. 
+
+Total variance of the annual index component, $Var(I_t)$, is calculated using standard methods. For the products and ratios (first part of right hand side of $I_t$) the Delta method is used to approximate the variance (G. Zimmerman, *pers. comm.*). The total variance is then determined based on the rules for the variance of a linear combination. Variance of $\bar I_t$ is not calculated, as the management decision rule is based on the point estimate.  
+
+# 2. Evaluation of nest plot estimate
+
+## a. Nest detection rate
+
+Nest detection rate, $D$, was estimated in 1998 from 13 plots that were double searched until 30 nests were found on the second search (Youkey 1998). He reported that 23 nest were found on the first search, 28 nests were found on the second search, and 21 nests were found on both searches. We interpreted this to mean that 2 nests were only found on the first search, 7 were only found on the second search, and 21 were found on both searches. Because we could not find any documentation of how the detection estimate was produced, we used maximum likelihood to fit two models to these data and estimate detection. The first model assumed that the nest detection rate was the same on the first and second search. The second model allowed for different detection rates on each search. For each, we used a multinomial likelihood formulation and the R package `bbmle` (Bolker 2020). Code details can be found in the Rmarkdown file that produced this document (https://doi.org/10.7499/xxxxxxxx).  
+
+```{r detection}
+data=c("10"=2, "01"=7, "11"=21)
+totnest=30
+#ML one parameter
+nll <- function(lp){
+  p <- plogis(lp)
+  pvect <- c(p*(1-p), (1-p)*p, p*p)
+  pvect <- pvect/sum(pvect)
+  -dmultinom(data, size = totnest, 
+             prob = pvect, 
+             log=TRUE)} 
+fit <- mle2(nll, start=list(lp=qlogis(0.5)))
+#summary(fit)
+lp <- proffun(fit, alpha=0.05)
+#plot(plogis(lp$prof$lp[,"par.vals"]) , abs(lp$prof$lp[,"z"]))
+p <- plogis(fit@coef)
+ci1 <- plogis(confint(fit,method="uniroot"))
+
+#ML with 2 parameters
+nll2 <- function(lp1, lp2){
+  p1 <- plogis(lp1)
+  p2 <- plogis(lp2)
+  pvect <- c(p1*(1-p2), (1-p1)*p2, p1*p2)
+  pvect <- pvect/sum(pvect)
+  -dmultinom(data, size = totnest, 
+             prob = pvect, 
+             log=TRUE)} 
+fit2 <- mle2(nll2, start=list(lp1=qlogis(0.5), lp2=qlogis(0.5)))
+#summary(fit2)
+lp <- proffun(fit2, alpha=0.05)
+#plot(plogis(lp$prof$lp1[,2][,1]) , abs(lp$prof$lp1[,"z"]))
+p <- plogis(fit2@coef)
+ci2 <- plogis(confint(fit2,method="uniroot"))
+
+
+#make table of results
+df <- data.frame(Model=c("Model 1", "Model 2", NA), Parameter=c("p", "p1", "p2"), Detection=c(plogis(fit@coef), plogis(fit2@coef)), 
+                 "CI"=c(paste(round(min(ci1[1]),4), "-",round(max(ci1[2]),4)), 
+                            paste(round(min(ci2[1,1]),4), "-",round(max(ci2[1,2]),4)),
+                            paste(round(min(ci2[2,1]),4), "-",round(max(ci2[2,2]),4))),
+                 "AIC"=c(summary(fit)@m2logL+2, summary(fit2)@m2logL+4,NA)
+)
+knitr::kable(df, digits=3, row.names=FALSE, align=c('l', 'c', 'c', 'c','c'), caption='Maximum likelihood estimate and summary for two nest detection models fit to the data of Youkey (1998). CI is the 95 percent confidence interval based on the likelihood profile.')
+```
+
+Nest detection rate for the one-parameter model (0.82) was similar to that reported and used in the management plan (0.83, Table 1). Nest detection for the two-parameter model showed lower detection on the first search (0.75) as compared to the second (0.91) and had a slightly lower AIC (Table 1). These results suggest some uncertainty in the nest detection rate, specifically that detection could be 10% lower than what is currently used. Because all nests found outside of a double-search protocol are found on the first search, these result suggest that 0.75 might be a more appropriate detection rate to use. These estimates, however, are made on a very small sample size (30 nests) using different crews than are used today and in a habitat that may have changed in visibility since these data were collected. Moreover, the protocol of stopping the second search when 30 nests are found, rather than completely double-searching a predetermined set of plots, introduces a stopping rule that may bias the nest detection rate high. Specific details of the field protocol are unclear in Youkey (1998). Additional estimation of the nest detection rate seems warranted if nest density estimates are used in the management index, and a distance sampling protocol should be used.  
+
+## b. Renesting estimate  
+
+```{r nestsperfemale}
+ci2sd = function(lower, upper, p=0.95){((upper-lower)/2)/qnorm(1-(1-p)/2)}
+#from Table 3 of Fondell
+lci=c(1.26, 1.17, 1.06, 1.24)
+uci=c(1.40, 1.29, 1.16, 1.38)
+npf=c(1.32, 1.23, 1.12, 1.30)
+meanNPF = mean(npf)
+sdNPF = ci2sd(lci, uci)
+msdNPF=sqrt(mean(sdNPF^2))
+
+```
+The renesting parameter, $R$, or the number of nests per female is based on results from a complicated combination of nest survey estimates, nest observations and an egg-removal experiment on marked birds, two different model-selection results, and an individual-based simulation model described in (Fondell et al. 2006). It is unclear how the results reported in Fondell et al. (2006, Table 3) are translated to the values used in the management index ($\hat R = 1.2196, SE(R) = 0.0322$), as these values are not reported in Fondell et al. (2006). If we assume that the values came from the last column of Table 3 in Fondell et al. (2006), the 'nests per female through 15 May', then the mean nest per female from 1997 to 2000 was `r round(meanNPF,2)` with a pooled standard deviation of `r round(msdNPF,2)`, which is very close to that used in the management index. Note that the nests per female vary slightly across years due to annual variation in success of first nests, so some additional variance could be added to $R$ to account for this.  Results in Fondell et al. (2006), however,  show that variation in nest per female due to success of the first nest is probably small. In any case, the quantities reported in Fondell et al. (2006) may have changed since they were estimated, so these might be re-evaluated under current conditions and assessed for change. However, doing so would require a large effort. 
+
+## c. Nest plot searches and estimates
+
+Plots are searched for nests to estimate nest density so that the ratio of nests to pairs observed from the air ($\hat \beta$) can be estimated. The surveyed area and sample selection has changed through time and is largely undocumented. Methods can be inferred from various unpublished reports (Youkey 1998, Fode 2010, Nelson et al. 2013, Gabrielson and Docken 2016), by email correspondence with USFS personnel (Nichols Docken, email), and by direct inspection of the data (this report). In addition, a USFWS report (Hodges and Eldridge 2007) give some details. The results and discussion below represent what we understand to be the methods used in the nest plot searches.  
+
+```{r nestplot, results='hide'}
+#load all the basic data and compute nest plot estimates
+nests <- read.csv("Data/Dusky_Nest_Plot_Data_QC.csv", stringsAsFactors = FALSE, header=TRUE)
+#data set of strata areas, from shapefiles sent by Nick
+# stratafication in 93-95 is different than 98 on. 
+# Low, medium, high, and egg strata are differ between the early and late periods
+crd <- readOGR(dsn="Data", layer="2010_strata")
+#some strangness in the Areas (meters) vs. areas in sq_km in @data of SpatialPolygon!
+# sq_km has been rounded to integer;
+#it seems that the polygons for 'low east' and 'low west', 'sparse east' and 'sparse west' were split, 
+# but the areas were not replaced in @data 
+crd@data$AREA <- raster::area(crd)
+crd@data$Sq_KM <- crd@data$AREA/1000000
+#now do the early, 93-95, period
+#projection for strata939495 is not defined,
+#first I read and reprojected, but then I just created a prj file by copying the one from 2010_strata
+crd2 <- readOGR(dsn="Data", layer="strat939495")
+#proj4string(crd2) <- "+proj=utm +zone=6 +datum=NAD83 +units=m +no_defs"
+#crd2 <- spTransform(crd2, CRS("+proj=utm +zone=6 +datum=NAD83 +units=m +no_defs"))
+#plot(crd2, col=rainbow(10)[crd2$DESCRIPTIO])
+#polygons seem to match up with 2010 strata that is EPSG:26906
+crd2@data$AREA <- raster::area(crd2)
+crd2@data$Sq_KM <- crd2@data$AREA/1000000
+#build data set of areas 1998-2016
+#Areas <- data.frame(Strata_ID=unique(nests$Strata_ID[nests$Year > 1995]), 
+#                    Strata_area=c(24.5, 65.5, 74.2, 48.0, 29.2, 62.6, 90.6, 65.5+74.2, 62.6+90.6))
+Areas <- data.frame(Strata_ID=names(by(crd@data$Sq_KM, crd@data$NAME, sum)), 
+                     Strata_area=as.vector(by(crd@data$Sq_KM, crd@data$NAME, sum)))
+Areas <- rbind(Areas, data.frame(Strata_ID=c("low", "sparse"),
+                                 Strata_area=c(sum(Areas$Strata_area[Areas$Strata_ID%in%c("low east", "low west")]), 
+                                               sum(Areas$Strata_area[Areas$Strata_ID%in%c("sparse east", "sparse west")]))
+                                 ))
+#now for 1993-95
+Areas2 <- data.frame(Strata_ID=names(by(crd2@data$Sq_KM, crd2@data$DESCRIPTIO, sum)), 
+                     Strata_area=as.vector(by(crd2@data$Sq_KM, crd2@data$DESCRIPTIO, sum)))
+Areas <- rbind(Areas, Areas2)
+rm(Areas2)
+#change strata names in nest plot data to match Areas
+nests <- nests %>% 
+  mutate(Strata_ID=if_else(Strata_ID=="H" & Year <= 1995, "High",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="E" & Year <= 1995, "Egg Island",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="L" & Year <= 1995, "Low",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="M" & Year <= 1995, "Medium",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="S" & Year <= 1995, "Sparse",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="E" & Year > 1995, "egg",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="L" & Year > 1995, "low",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="LE" & Year > 1995, "low east",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="LW" & Year > 1995, "low west",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="M" & Year > 1995, "medium",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="N" & Year > 1995, "newmarsh",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="S" & Year > 1995, "sparse",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="SE" & Year > 1995, "sparse east",Strata_ID),
+         Strata_ID=if_else(Strata_ID=="SW" & Year > 1995, "sparse west",Strata_ID)
+         )
+
+
+#Calculate nest estimate, compare estimate based on density verse count
+# different plot areas on Egg Island in 1993 and 1994
+# Use stratified estimates as above, strata from strat939495 from years 1993-95 and 2010_strata for all other years
+stEst <-  nests %>% 
+  mutate(dNests=Nests/Plot_area) %>%
+  group_by(Year, Strata_ID) %>%
+  summarise(n=n(), mAreas=mean(Plot_area), mNests=mean(Nests), ssNests=var(Nests), 
+            mdNests=mean(dNests), ssdNests=var(dNests)) %>%
+  left_join(Areas) %>%
+  mutate(N=Strata_area/mAreas, NNests = N*mNests, vNests=N*(N-n)*ssNests/n, 
+         sdNests=sqrt(vNests), NdNests = Strata_area*mdNests, vdNests = (Strata_area^2)*ssdNests/n, 
+         sddNests = sqrt(vdNests))
+
+# plot(stEst$NNests, stEst$NdNests)
+# abline(a=0, b=1)
+# points(stEst$sdNests, stEst$sddNests, pch=3)
+
+#just use density-based estimates
+estimates <- stEst %>% ungroup() %>%
+  filter( !Strata_ID %in% c("Egg Island", "egg")) %>% #Remove Egg Island because it is not always sampled
+  group_by(Year) %>%
+  summarise(n = sum(n), mEst=sum(NdNests), vEst=sum(vdNests), sdEst=sqrt(vEst))
+
+```
+
+
+```{r nestplotareas, fig.cap="Nest plot strata used from 1993-1995 and from 1998-2016. These strata were used to calculate nest density and air density estimates for the air to ground ratio but not for nest plot sample selection. Plot selection appears have been a simple random sample in 2010 and earlier, excluding Egg Island and maybe excluding the Sparse stratum in 1994-1995. A stratified random sample was employed after 2010, however, the East-West split of the Sparse and Low strata was not applied until 2016."}
+plotareas <- st_as_sf(crd) %>% select(NAME, Sq_KM, geometry) %>% 
+  filter(!NAME%in%c("east", "castleisland", "castlefringe")) %>%
+  rename(Strata=NAME) %>%
+  mutate(Period = "1998-2016", 
+         Strata = as.character(Strata),
+         Strata = if_else(Strata == "egg", "Egg Island", Strata),
+         Strata = if_else(Strata == "low east", "Low East", Strata),
+         Strata = if_else(Strata == "low west", "Low West", Strata),
+         Strata = if_else(Strata == "medium", "Medium", Strata),
+         Strata = if_else(Strata == "newmarsh", "New Marsh", Strata),
+         Strata = if_else(Strata == "sparse east", "Sparse East", Strata),
+         Strata = if_else(Strata == "sparse west", "Sparse West", Strata)
+         )
+temp <- st_as_sf(crd2) %>% select(DESCRIPTIO, Sq_KM, geometry) %>% 
+  rename(Strata=DESCRIPTIO) %>%
+  mutate(Period = "1993-1995")
+
+plotareas <- rbind(temp, plotareas)
+rm(temp)
+
+p <- ggplot() +
+  geom_sf(data=plotareas, aes(fill=Strata)) +
+  facet_wrap(~Period, nrow = 1) + 
+  theme_minimal()
+
+print(p)
+
+```
+
+
+Estimates of the nesting population have never been made as far as we are aware. Therefore, we used the nest plot data to produce estimates and standard errors. Because of uncertainty in sampling protocol, we produced estimates based on simple random sampling and stratified random sampling for the year 1993 to 2010 and only using stratified random sampling after 2010. If the sample selection procedure was in fact simple random sampling, then both methods should produce similar estimates. Figure 2 shows the nest plot estimates uncorrected for nest detection.  
+
+
+```{r nestestimates, fig.cap="Estimated number of Dusky Canada Goose nests in the West Delta area of the Copper River Delta excluding Egg Island and uncorrected for nest detection. Estimates are calculated assuming simple random sampling (SRS) arcoss the West Delta or based on stratification of the West Delta as shown in Figure 1. After 2010, only stratified estimates are given because it is known that the sampling protocol used a stratified design."}
+#Power/variance analysis
+# (1) for simple random sampling in West Delta
+# use average variance for 1993-2010 when there was simple random sampling
+totAreaEarly <- sum(Areas$Strata_area[Areas$Strata_ID %in% c('Low', 'High', 'Medium', 'Sparse')])
+totAreaLate <- sum(Areas$Strata_area[Areas$Strata_ID %in% c('low', 'medium', 'sparse', 'newmarsh')])
+
+srsNest <- nests %>% 
+  mutate(dNests=Nests/Plot_area) %>%
+  filter(Strata_ID %in% c('Low', 'High', 'Medium', 'Sparse', 'low', 'medium', 'sparse', 'newmarsh'), 
+         Year < 2013) %>%
+  group_by(Year) %>%
+  summarise(n=n(), mAreas=mean(Plot_area), mdNests=mean(dNests), ssdNests=var(dNests)) %>%
+  mutate(Area = if_else(Year <= 1995, totAreaEarly, totAreaLate), NNests = mdNests*Area, 
+         vNests=(Area^2)*ssdNests/n, sdNests=sqrt(vNests))
+mss <- srsNest %>% summarise(mss = mean(ssdNests), mmN = mean(mdNests))
+
+#strange srs and sum of stEst don't match up
+#must note have been SRS in 1993-95 and maybe not in 98 or 2001
+# when 'sparse' is removed from the totAreaEarly calculate, SRS and stratified estimate match up better
+# also see plots of strata polygons and plots for early years, few or no sample in sparse
+# jit=0.1
+# plot(srsNest$Year-jit, srsNest$NNests, pch=16, ylab="Nest point estimate", xlab="Year", 
+#      ylim=c(0, 15000), xlim=c(1993, 2016))
+# points(estimates$Year+jit, estimates$mEst, pch=16, col="darkgray")
+# legend("topright", legend=c("Stratified Estimate", "SRS Estimate"), pch=16, col=c("darkgray", 1))
+# arrows(x0=estimates$Year+jit, x1=estimates$Year+jit, y0=estimates$mEst-2*estimates$sdEst, 
+#        y1=estimates$mEst+2*estimates$sdEst, length=0)
+# arrows(x0=srsNest$Year-jit, x1=srsNest$Year-jit, y0=srsNest$NNests-2*srsNest$sdNests, 
+#        y1=srsNest$NNests+2*srsNest$sdNests, length=0)
+# Try a ggplot
+df <- srsNest %>% select(Year, NNests, sdNests) %>% mutate(Estimate = "SRS Estimate") %>%
+  rename(Nests=NNests)
+temp <- estimates %>% select(Year, mEst, sdEst) %>% rename(Nests = mEst, sdNests=sdEst) %>%
+  mutate(Estimate="Stratified Estimate")
+df <- bind_rows(df, temp) %>% mutate(lower=Nests-1.96*sdNests, upper=Nests+1.96*sdNests)
+rm(temp)
+p <- ggplot() +
+  geom_pointrange(data=df, aes(x=Year, y=Nests, ymin=lower, ymax=upper, 
+                               group=Estimate, color=Estimate),
+                  position=position_dodge(width=0.5))
+print(p)
+  
+```
+
+
+After 2010, stratified sampling was used. From 2000 to 2010 it appears that simple random sampling was used. Before 2000, reports state that simple random sampling was used, but inspection of the raw data and the estimates in Figure 2 suggest this is not the case. In the raw data there are only three plot records in the Sparse strata for 1993 and 1998 and none for 1994 and 1995. It seems unlikely, but not impossible, that simple random sampling would produce this pattern because this stratum is so large. Conversely, there are a relatively large number of plots in the High stratum each year even though this stratum is very small (Figure 1). When the Sparse stratum is removed and simple random sampling estimates are made, the estimates are closer to but still higher than the stratified estimates (results not shown), which would be expected if the Sparse stratum was not sampled or there was some form of non-equal sample selection probability across other strata that sampled the High stratum more intensely. Depending on which nest plot estimates are used, the nesting population either shows a decrease (under a simple random sampling estimate) or a stable population (under stratified estimates). Because of the undocumented and uncertain sampling protocol, nest population estimates before 2000 should be ignored or treated with caution. Strata-specific estimates, however, can still be used if sampling was random within a stratum.  
+
+Unfortunately, there is some evidence that plot sample selection has not been random within strata. In discussion with USFS personnel on plot sampling selection protocol (N. Docken, *pers. comm.*) it was revealed that standard procedure was for plots that contained < 50% upland habitat (nesting habitat) to be excluded from searches and an alternative plot is selected for searching. This would induce a design- or protocol-based bias into the estimated nest densities due to non-random selection of plots; thereby biasing the management index higher. The magnitude of the bias depends on the frequency of plots with <50% habitat and on the density of nests in habitat. For an extreme example, imagine that there was a density of 1 nest $km^{-2}$ of habitat and 50% of the plots had 100% habitat and 50% had no habitat. Then in the entire study area, true nest density would be 0.5 $km^{-2}$ but the estimated nest density would be twice as high at 1 $km^{-2}$. When the estimated density is multiplied by the survey area, the estimate produce by the protocol that allows for plot replacement would yield a total nest population twice as large has the random selection protocol. Without recording the exact proportion of habitat in each plot and having an estimate of the amount of habitat in the entire study area, unbiased estimates of nest density are not possible. Instead, searching and recording nests from a true random sample of plots allows for unbiased nest density estimates. We recommend implementing random plot selection and not rejecting plots due to any characteristic of the plot.  
+
+To provide some guidance on future sample size of the nest plot survey for providing nest density estimates, we used the 2016 data to estimate the among plot variance in nest density and then calculated the coefficient of variation ($cv$) for various sample sizes (Figure 3). Note that if all plots are searched regardless of the proportion of habitat, then the among plot variance will increase and the sample size needed for a given $cv$ will increase proportionally. Also note that such sample size calculations as in Figure 3 are based on assuming that the estimated variance in 2016 is true, as such they should be interpreted cautiously and used only as 'rules of thumb'.  
+
+
+```{r nestvar, fig.cap="Coefficient of variation of the estimated number of nests in the West Delta as a function of sample size (thick solid line). This estimate is uncorrected for detection and based on the 2016 plot search data with a sample size of 43 plots (thick dashed line). Also shown are reference lines (thin dashed lines) for one half (22) and twice (86) the number of searched plots."}
+#for the stratified estimates, use 2016 only
+df <- stEst %>% filter(Year == 2016, Strata_ID != 'egg') %>%
+  select(Year, Strata_ID, Strata_area, n, mdNests, ssdNests)
+cv <- c()
+f <- seq(0.25, 4, by=0.1)
+for(i in 1:length(f)){
+  n <- df$n*f[i]
+  cv[i] <- sqrt((totAreaLate^2)*sum(df$ssdNests/n))/sum(df$mdNests*totAreaLate)
+}
+# plot(43*f, cv, ylim=c(0,0.5), type="l", lty=1, lwd=2, xlab="Sample Size", 
+#      ylab="Coefficient of Variation")
+# abline(v=43/c(0.5, 1,2), lty=1, col="darkgray")
+# abline(h=c(0.3125, 0.22, 0.155), lty=1, col="darkgray") 
+
+df <- data.frame(n=43*f, cv=cv)
+p <- ggplot() + 
+  geom_line(data=df, aes(x=n, y=cv), size=1.5) + 
+  geom_segment(aes(x=43, xend=43, y=0, yend=0.22), linetype="dashed", size=1) + 
+  geom_segment(aes(x=0, xend=43, y=0.22, yend=0.22), linetype="dashed", size=1) +
+  geom_segment(aes(x=43/2, xend=43/2, y=0, yend=0.3125), linetype="dashed") + 
+  geom_segment(aes(x=0, xend=43/2, y=0.3125, yend=0.3125), linetype="dashed") + 
+  geom_segment(aes(x=43*2, xend=43*2, y=0, yend=0.155), linetype="dashed") + 
+  geom_segment(aes(x=0, xend=43*2, y=0.155, yend=0.155), linetype="dashed") + 
+  labs(x="Sample Size (n)", y="Coeficient of Variation") + 
+  annotate("text", x=c(18.5, 40, 83), y=0.05, label=c("n = 22", "n = 43", "n = 86"), angle=90)
+
+print(p)
+```
+
+
+# 3. Evaluation of aerial survey
+
+**Chuck, insert aerial survey introduction/description**
+**include description of survey history and switch to biased design**
+**Also include navigation accuracy and how that has changed through time, + any other important details**
+
+```{r airsurveyarea, fig.cap="Copper River Delta aerial survey strata (colored polygons) and transects (black lines) for 2016. Note that in the two island areas, the transects extend beyound the survey area and in the western and eastern parts of the study area, transects do not extend to the study area boundary, inducing a biased sample of the survey area."}
+# coast data, just for reference
+coastline <- read_sf("Data/CRD_2018_DesignStrata.shp")
+# air transect lines
+transects <- read_sf("Data/CRD_2016_Transects.shp")
+#why is transect 95 long, but I count 56?
+#transects <- transects[1:56,]
+
+# obs <- read.csv("Data/CRD_2016_QCObs_HWilson.csv", stringsAsFactors = FALSE, header=TRUE)
+# obs2 <- read.csv("Data/CRD_2016_QCObs_DMarks.csv", stringsAsFactors = FALSE, header=TRUE)
+# obs <- rbind(obs, obs2)
+# obs <- obs[obs$Lat > 50 & obs$Lon < -90,] 
+# obs <- obs[obs$Species %in% c("DCGO"),] 
+# obs <- st_as_sf(obs, coords = c("Lon", "Lat"), crs=st_crs(4326))
+# obs <- st_transform(obs, crs=st_crs(coastline))
+
+# now make the plot
+p <- ggplot() +
+  geom_sf(data=coastline, aes(fill=STRATNAME)) +
+  geom_sf(data=transects) +
+  #geom_sf(data=obs, aes(color=Obs_Type)) +
+  scale_fill_discrete(name = "Strata") +
+  theme_minimal()
+print(p)
+```
+
+The resulting estimates for Dusky Canada Goose indicated breeding pairs. **Chuck, expand and explain estimates**
+
+```{r airobs, fig.cap="Estimated number of Dusky Canada Goose indicated breeding birds in the Copper River Delta aerial survey area for each observer (top) and for the average of observers in each year (bottom)."}
+Combined <- filter(CRDHistoric$combined, Species=="DCGO") %>% 
+  select(Year, ibb, ibb.se) %>%
+  mutate(X="Combined", Observer = NA)
+Observers <- filter(CRDHistoric$expanded.table, Species=="DCGO") %>% 
+  select(Year, strata, Observer, ibbtotal.est, var.Nib) %>% 
+  mutate(fYear = factor(Year), strata=factor(strata)) %>% 
+  group_by(Year, Observer) %>% summarise(ibb=sum(ibbtotal.est), ibb.se=sqrt(sum(var.Nib))) %>%
+  mutate(X="By Observer")
+
+dat <- bind_rows(Observers, Combined)
+
+gplot <- ggplot() + 
+  geom_pointrange(data=dat, aes(x=Year, y=ibb, ymin=ibb-2*ibb.se, ymax=ibb+2*ibb.se,
+                                      color=Observer), position=position_dodge(width=0.25)) + 
+  scale_color_discrete(breaks=levels(dat$Observer)) +
+  facet_wrap(~X, ncol = 1) + 
+  labs(x="Year", y="Indicated Breeding Birds")
+print(gplot)
+```
+
+## a. Model-based observer and year effects
+
+In order to present yearly survey estimates that are free of observer effects, we used a generalized linear mixed model to estimate year, observer, and stratum effects on the design-based point estimates of Dusky Canada Goose from the aerial survey. These data are available directly from `AKaerial::CRDHistoric$expanded.table`. We used the R package `mgcv` (Wood 2021) to implement the mixed model with a fixed effect for strata, and random effects for year and observer and a Tweedie distribution for the likelihood of the response, which was indicated breeding birds for each strata, year, observer combination. We then used the fitted model to predict responses in each year after removing observer effects (i.e., at the mean observer effect of 0) and predict observer effects for each observer in an arbitrary year (2001).  
+
+```{r fitgam, eval=TRUE, fig.cap="Estimated effect of year (A) and observer (B) from a generalized linear mixed model predicting strata-specific estimate from the Dusk Canada Goose aireal survey. Points are estimated effects from the model with bars showing 2 SE. Year effect (A) are shown after removing observer effects. Effects are shown on the response scale (number of indicated breeding birds)."}
+#estimate CRD aerial observer, strata, and year effects
+dat <- filter(CRDHistoric$expanded.table, Species=="DCGO") %>% 
+  select(Year, strata, Observer, ibbtotal.est, var.Nib) %>% 
+  mutate(fYear = factor(Year), strata=factor(strata), dum=1, cYear=Year-1993)
+#dum 'trick' is to make prediction after removing the random effect, 
+#  see https://stats.stackexchange.com/questions/131106/predicting-with-random-effects-in-mgcv-gam
+# can also be done using the 'exclude' option in gam but this 'dum' seemed easier for type="response"
+fit <- gam(ibbtotal.est~strata+s(Observer, bs='re', by=dum)+s(fYear, bs='re'), family=tw, data=dat)
+#fit <- gam(ibbtotal.est~strata+s(Observer, bs='re')+s(fYear, bs='re'), family=gaussian, data=dat)
+#tweedie a bit better, 0 obs for one stratum in one year
+#fit.s <- gam(ibbtotal.est~strata+s(Observer, bs='re', by=dum)+s(cYear, k=10), family=tw, data=dat)
+#fit.s has much lower AIC, no real reason to think a smooth effect of year is correct? might explore more
+# AIC(fit, fit.s)
+#plot year effects
+df <- expand.grid(fYear=unique(dat$Year), strata=c("West Delta", "East Delta", "Egg Island"),
+                 Observer="HMW", dum=0)
+pfit <- predict(fit, type="response", newdata=df, se.fit=TRUE)
+df <- bind_cols(df, as.data.frame(pfit)) %>% group_by(fYear, Observer) %>%
+  summarise(fit=sum(fit), se.fit=sqrt(sum(se.fit^2)))
+df <- data.frame(Year=df$fYear, Effect=df$fit, lower=df$fit-2*df$se.fit,
+                 upper=df$fit+2*df$se.fit, Observer=df$Observer)
+gplot <- ggplot(df, aes(x=Year, y=Effect))+
+  geom_pointrange(aes(x=Year, y=Effect, ymin=lower, ymax=upper))
+#plot observer effects
+df <- data.frame(fYear="2000", strata="West Delta", Observer=levels(dat$Observer), dum=1)
+pfit <- predict(fit, type="response", newdata=df, se.fit=TRUE)
+#remove mean predictions
+pfit$fit <- pfit$fit - mean(pfit$fit)
+df <- data.frame(Observer=df$Observer, Effect=pfit$fit, lower=pfit$fit-2*pfit$se.fit, 
+                 upper=pfit$fit+2*pfit$se.fit, fYear=NA,
+                 X="Observer Effect")
+gplot2 <- ggplot(df, aes(x=Observer, y=Effect))+
+  geom_pointrange(aes(x=Observer, y=Effect, ymin=lower, ymax=upper)) +
+  geom_hline(yintercept = mean(pfit$fit))
+
+p <- ggarrange(gplot, gplot2, labels=c("A", "B"), ncol=1)
+
+print(p)
+```
+
+Results of the modeled year and observer effects are shown in Figure 6. Note that variation among year is less than in the design-based estimates (Figure 5) that are the response in this model.  This effect is due to shrinkage of the random effect estimates toward the grand mean. This is property of random effect model and is known to improve predictions. The fitted model, however, has no serial autocorrelation in it as would be expected in a population time series. Such as model could be fit using a state-space model or the current approach with a smooth effect of year (a generalized additive model or GAM). This would be expected to change the estimated observer effects and deserves more exploration. In any case, the modeled results here are a statistical partition between predictors and gives an alternative to average estimates across observer using equal weighting, as is currently done (compare Figure 5 A and B). Alternatives would be to directly measure observer effect that are thought to be important, such as observer-specific detection rates, and directly correct for these as part of the estimation method. Observer differences would then be measured on a common scale, although other observation process might still cause differences between observers (differences in calling pairs, singles or flocks; differences in the observation area used by observers, etc.).   
+
+## b. Model-based estimate of spatial density, population size, and aerial survey design bias
+
+We used a generalized additive model (GAM, Wood 2012) to estimate the expected density of observed Dusky Canada Goose singles and pairs as smooth functions of space using data from the aerial survey. This allows for the use of spatially referenced data at a fine scale by breaking transect into many small segments instead of using design-based point estimates as above or the observation on a whole transect as the sample unit for a response. From this model we can make a model-based prediction of the total indicated breeding birds in the survey region and compare the prediction to the design-based estimate. The different between these estimates would give an estimate of the magnitude of the design bias because under the assumption that the model is correct, the model-based estimate is unbiased; whereas, the design-based estimate is unbiased only if the sample selection is unbiased (random). Because the surveyed transects stop before edges of the survey region (Figure 4), we know the design is biased and the magnitude of the bias will depend on the density in the unsampled area relative to the mean density over the entire area. 
+
+To build the spatial model, we first had to  break up the transects into spatially-references segments and then assign observations from each observer (including observation of no birds) to each segment. The number of singles and pairs for each observer in each segment then becomes the response in the GAM. The form of linear predictor for the GAM is
+$$IBP_i \sim log(a_i) + observer_i + s(X_i,Y_i),$$
+with $IBP_i$ the number of indicated breeding pairs for observation $i$, $log(a_i)$ is the log area associated with the observation (an offset), $observer_i$ is a factor variable for the observer identity associated with observation $i$, and $s(X_i, Y_i)$ is a smooth function of location that is estimated as part of the GAM. We used the transect segment center as an approximate location for all observations. For this exploratory work, we used a segment length of 1000 meters and a width of 200 meters for each observer, except at the boundaries of transects where the segment may have been longer or shorter. We explored smaller segments, but little difference was found in results. We used a negative binomial likelihood as part of the model, and used smoothing parameters that allowed for sufficient flexibility in the smooth complexity.  Model fit was assessed with various plots of residuals and quantile-quantile plots, and smooth parameter selection was assessed using the checks described in Wood (2012). We fit the model separately to four years of data (2016-2019), using the segments and observation from the appropriate transects for the year. The above model fit a signle effect for observer across space. We also explore allowing a different smooth function for each observer, but this model did not fit as well and is difficult to justify *a prior* because we expect observations to be generated from a common underlying density at each location for each observer with average difference arising due to constant factors associated with observer-specific properties.  
+
+To visualize the density surface and calculate the expected population size in the entire study area, we used the fitted model to predict the expected response at each 1 $km^2$ cell in the study area for each observer and each of the four years. The total population estimate for a year is the sum over all cells for an observer. Similarly the mean density over the survey area for a year is the mean over all cells in the survey area. Finally, to compare the model-based estimate to the design-based estimate, we average the total population size for each observer (using equal weighting) and subtracted this from the design-based estimate, which is also based on equal weight averaging between observers.  
+
+```{r spatialmodel, eval=TRUE, fig.cap="Predicted density (per square kilometer) of Dusky Canada Goose as estimated by the pilot on the Copper River Delta from a generalized additive model using observations from the aerial survey in years 2016 - 2019."}
+#first make segments for 2016
+source("trans2seg.R")
+p <- list() #list for ggplots
+sumdf=data.frame() #data frame for population estimates
+for(i in 2016:2019){
+# air transect lines
+transects <- read_sf(paste("Data/CRD_",i,"_Transects.shp", sep=""))
+segs <- trans2seg(transects, year=i, area="CRD")
+
+# read in observations and do some QC
+obs <- read.csv(paste("Data/CRD_",i,"_QCObs_HWilson.csv", sep=""), stringsAsFactors = FALSE, header=TRUE)
+obs2 <- read.csv(paste("Data/CRD_",i,"_QCObs_DMarks.csv", sep=""), stringsAsFactors = FALSE, header=TRUE)
+obs <- rbind(obs, obs2)
+obs <- obs[obs$Lat > 50 & obs$Lon < -90,] 
+obs <- obs[obs$Species %in% c("DCGO"),] 
+obs <- st_as_sf(obs, coords = c("Lon", "Lat"), crs=st_crs(4326))
+obs <- st_transform(obs, crs=st_crs(coastline))
+# project segs
+segs <- st_transform(segs, st_crs(26906))
+obs <- st_transform(obs, st_crs(26906))
+transects <- st_transform(transects, st_crs(26906))
+
+# join segments and obs
+obs <- st_join(obs, segs, join=st_nearest_feature)
+
+#get rid of stuff we don't need
+obs <- select(obs, Year, Month, Day, Seat, Observer, Time, Num, Obs_Type, ORIGID, Effort, Sample.Label)
+obs_df <- cbind(as.data.frame(st_drop_geometry(obs)),
+                st_coordinates(obs))
+# table(obs_df$Num[obs_df$Obs_Type=="open"])
+# table(obs_df$Num[obs_df$Obs_Type=="single"])
+# table(obs_df$Num[obs_df$Obs_Type=="pair"])
+
+# try mgcv for map density
+#remove flocks and summarizse by segment
+tot <- obs_df %>% filter(Obs_Type != "open") %>%
+  group_by(Sample.Label, Observer) %>%
+  summarise(tot = sum(Num))
+#project to UTMs
+segs <- st_transform(segs, st_crs(transects))
+segs_df <- cbind(as.data.frame(st_drop_geometry(segs)),
+                 st_coordinates(segs))
+#find 'zeros' for each observer
+obscode <- unique(obs$Observer)
+obs1 <- tot %>% filter(Observer==obscode[1]) %>% select(Sample.Label, tot) %>% ungroup()
+obs2 <- filter(tot, Observer==obscode[2]) %>% select(Sample.Label, tot) %>% ungroup()
+obs1 <- left_join(segs_df, obs1) %>% mutate(Observer=obscode[1])
+obs1$tot[is.na(obs1$tot)] <- 0
+obs2 <- left_join(segs_df, obs2) %>% mutate(Observer=obscode[2])
+obs2$tot[is.na(obs2$tot)] <- 0
+tot <- bind_rows(obs1, obs2)
+#head(tot)
+
+#fit GAM
+#library(mgcv)
+tot$Observer <- factor(tot$Observer)
+tot$Effort <- as.numeric(tot$Effort)*200/1000000
+tot$logEffort <- log(tot$Effort)
+fit <- gam(tot~Observer+s(X, Y, k=50), offset=logEffort, family=nb, data=tot)
+# nb a bit better
+# fit <- gam(tot~Observer+s(X, Y, k=50), offset=logEffort, family=tw, data=tot)
+# fit2 <- gam(tot~Observer+s(X, Y, k=50, by=Observer), offset=logEffort, family=nb, data=tot)
+# AIC(fit, fit2)
+#            df     AIC
+# fit  28.15754 2286.68
+# fit2 40.52322 2292.86
+#simpler model is better
+# checking done outside of knitr, looks good
+# summary(fit)
+# gam.check(fit)
+# plot(fit)
+# vis.gam(fit, view=c("X", "Y"), type="response", plot.type="contour", too.far = 0.1, color="terrain")
+
+#predict at grid
+coastline <- st_transform(coastline, st_crs(26906))
+#make grid
+predpoints <- st_as_sf(st_make_grid(coastline, cellsize=1000, what="centers"))
+predpoints <- st_join(predpoints, coastline, join=st_intersects)
+predpoints <- predpoints[!is.na(predpoints$STRAT),] #can't figure out how to remove NA without using column name
+# plot(st_geometry(predpoints), pch=".")
+# plot(st_geometry(coastline), add=TRUE)
+
+preds1 <- predict(fit, type="response", newdata=data.frame(as.data.frame(st_coordinates(predpoints)), 
+                                                           Observer=obscode[1]))
+
+preds2 <- predict(fit, type="response", newdata=data.frame(as.data.frame(st_coordinates(predpoints)), 
+                                                           Observer=obscode[2]))
+#Calculate population estimate and make data frame
+sumdf <- rbind(sumdf, data.frame(Mean1=mean(2*preds1), Mean2=mean(2*preds2), Estimate1=sum(2*preds1), 
+                    Estimate2=sum(2*preds2), Model=(sum(2*preds1) + sum(2*preds2))/2, 
+                    Design=Combined$ibb[Combined$Year==i], 
+                    Bias=Combined$ibb[Combined$Year==i]-(sum(2*preds1) + sum(2*preds2))/2))
+
+df <- bind_cols(data.frame(Density=preds1, Observer=obscode[1]), predpoints)
+df2 <- bind_cols(data.frame(Density=preds2, Observer=obscode[2]), predpoints)
+df <- st_as_sf(df)
+df2 <- st_as_sf(df2)
+
+p[[i-2015]] <- ggplot() + 
+  geom_sf(data=coastline) +
+  geom_sf(data=df, aes(color=Density, fill=Density), shape=22, size=2) +
+  scale_fill_gradientn(colours = terrain.colors(7)) + 
+  scale_color_gradientn(colours = terrain.colors(7)) + 
+  theme_minimal() + 
+  theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())
+# p2 <- ggplot() + 
+#   geom_sf(data=coastline) +
+#   geom_sf(data=df2, aes(color=Density, fill=Density), shape=22, size=2) +
+#   scale_fill_gradientn(colours = terrain.colors(7)) + 
+#   scale_color_gradientn(colours = terrain.colors(7)) + 
+#   theme_minimal()
+
+# pp <- ggarrange(p, p2, ncol = 1, labels = obscode, hjust=-3, vjust=1)
+# print(pp)
+}
+#print(p)
+ggarrange(plotlist=p, ncol=2, nrow=2, labels=2016:2019)
+```
+
+The expected density surface for 2016-2019 is shown in Figure 7. The highest density areas are in the southern part of the West Delta and Egg Island strata, and this general pattern seems relatively consistent across years. Importantly, the western edge of the West Delta stratum that is not sampled by transects (Figure 6) is below average density, which would cause the design-based estimates to be biased high.  
+
+Table 2 shows the mean density and population estimates for each observer, the model-based population estimate averaged across observers, the design-based population estimate, and the difference between the model-based and design-based estimate. The right-seat observer ('2' in Table 2) always has a lower mean density of observations than the pilot, which results in a lower population estimate (Figure 7). This result is consistent with the observer-specific design-based estimates (Figure 5, upper panel), and on the observer effects estimated in the generalize linear mixed model that used these point estimates (Figure 6B). The design-based estimate is always higher than the model-based estimate when comparing these across the four years (Table 2). On average, the design-based estimate is `r round(mean(sumdf$Bias),1)` birds higher than the model-based estimate, or approximately `r round(mean(sumdf$Bias)/mean(sumdf$Model),2)*100`% of the mean model-based estimate. This is about one-half the proportional correction to the management index based on the renesting rate, $R$. 
+
+```{r modelpopest}
+knitr::kable(data.frame(Year=2016:2019, sumdf), digits=1, align="c", caption="Expected indicated breeding bird density over the entire survey area for the pilot (indiced by a 1) and the observer (2) from a generalized additive model smooth of space. 'Mean' is the mean density over the survey area, 'Estimate' is the sum of the model expectation over the survey area, 'Model' is the average of the modeled predictions for each observer, 'Design' is the design-based estimate of the total population, and 'Bias' is the model-based estimate substracted from the design-based estimate." )
+```
+
+A biased aerial survey estimate, however, is not necessarily problematic in the current application because the survey is corrected for bias by using the ground nest plot data. 
+
+# 4. Evaluation of air to ground ratio
+
+```{r datasetup}
+air <- read.csv("Data/CRD.FS.expanded.csv", header=TRUE, stringsAsFactors = FALSE)
+air <- air %>% 
+  filter(Year %in% unique(estimates$Year), Species == "DCGO") %>%
+  select(Year, strata, ibb=ibbtotal.est, ibb.var=var.Nib) %>%
+  group_by(Year, strata) %>%
+  summarise(n=n(), ibb=mean(ibb), ibb.var=sum(ibb.var)/(n^2)) %>%
+  mutate(ibb.se=sqrt(ibb.var)) 
+
+#wasn't until 2016 that east/west strata split was applied, with one exception in 2013
+#need to sum east/west low and sparse strata for year 1998 - 2013
+air2 <- air %>% filter(Year %in%1998:2013, strata %in% c("low east", "low west")) %>%
+  group_by(Year) %>%
+  summarise(n=n(), ibb=sum(ibb), ibb.var=sum(ibb.var)) %>%
+  ungroup() %>%
+  mutate(strata = "low", ibb.se = sqrt(ibb.var))
+air3 <- air %>% filter(Year %in%1998:2013, strata %in% c("sparse east", "sparse west")) %>%
+  group_by(Year) %>%
+  summarise(n=n(), ibb=sum(ibb), ibb.var=sum(ibb.var)) %>%
+  ungroup() %>%
+  mutate(strata = "sparse", ibb.se = sqrt(ibb.var))
+
+air <- air %>% filter( !(Year %in% 1998:2013 & 
+                           strata %in% c("sparse east", "sparse west", "low east", "low west"))) %>%
+  bind_rows(air2, air3) %>% arrange(Year, strata)
+rm(air2, air3)
+```
+
+## a. Total ground estimate to total air estimate 
+
+```{r basicair2ground}
+air2 <- air %>% filter( !strata%in%c("Egg Island", "egg", "east", "castlefringe", "castleisland") ) %>% 
+  select(Year, ibb, ibb.var, ibb.se) %>% 
+  group_by(Year) %>% summarise(ibb=sum(ibb), ibb.var=sum(ibb.var), ibb.se=sqrt(sum(ibb.var)))
+  
+df <- estimates %>% filter(Year != 2013) %>% left_join(air2) %>%
+  mutate(Ratio=mEst/(ibb/2), 
+         RatioSE=sqrt(
+           (mEst^2) * ((ibb.var/4) / ((ibb/2)^4)) + 
+             (vEst / (ibb/2)^2) - 
+             (vEst) * ((ibb.var/4) / ((ibb/2)^4))
+           ),
+         upper=Ratio+2*RatioSE, lower=Ratio-2*RatioSE
+         )
+df2 <- data.frame(x=2013, y=3.4, Mean = paste("Mean ratio = ", round(mean(df$Ratio), 2)), 
+                  SD = paste("SD(ratio) = ", round(sd(df$Ratio), 2)))
+
+p <- ggplot(data=df, aes(x=Year, y=Ratio)) + 
+  #geom_point() +
+  geom_pointrange(aes(x=Year, y=Ratio, ymin=lower, ymax=upper)) + 
+  geom_hline(aes(yintercept = mean(Ratio))) +
+  geom_text(data=df2, aes(x=x, y=y, label=Mean)) + 
+  geom_text(data=df2, aes(x=x+0.1, y=y-0.3, label=SD))
+print(p)
+```
+
+```{r}
+summary(lm(df$mEst~I(df$ibb/2)-1))
+summary(lm(df$mEst~I(df$ibb/2)))
+summary(lm(df$mEst~I(df$ibb/2)+df$Year))
+```
+
+## b. Ratio of air to ground across nest plot strata and years (Hodges and Eldridge 2007)
+
+Here we attempt to repeat the analysis of Hodges and Eldridge (2007) using simple linear regression and the nest plot stratification in Figure 1. 
+
+```{r hodges, fig.cap="Strata-specific nest plot estimates against aerial survey estimates (black dots with 2 SE bars indicated by the black line) for nest plot strata. A - C are the years and strata originally reported in Hodges and Eldridge (2007) and are the strata with > 3 nest plots. Additional years where nest plot data was collected are shown in D and by the open triagles in B and C, which are for the year 2001. Blue lines indicate the linear regression expectation from a no-intercept regression, and the gray band is the 95% confidence interval for the expected response (nest number)."}
+#########################################################
+# Plot air v. nest density by strata, aka, Hodges 2007
+
+#plot(factor(air$strata), air$ibb)
+  
+df <- air %>% 
+  filter( strata %in% unique(nests$Strata_ID) ) %>%
+  select(Year, strata, ibb, ibb.var, ibb.se) %>%
+  rename(Strata_ID = strata) %>%
+  left_join(stEst) %>%
+  mutate(ibp = ibb/2, ibp.var=ibb.var/4, ibp.se=sqrt(ibp.var))
+
+#plot all years
+#plot(df$Year, df$ibp)
+#plot(df$Year, df$NdNests)
+#########################
+df <- df %>% mutate(lowerN=NdNests-sddNests, upperN=NdNests+sddNests, 
+                    lowerIBP = ibp-ibp.se, upperIBP=ibp+ibp.se)
+p1 <- ggplot(df, aes(x=ibp, y=NdNests)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, ymin=lowerN, ymax=upperN)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, xmin=lowerIBP, xmax=upperIBP)) +
+  geom_smooth(method="lm", formula = y~x-1, se=TRUE) + 
+  labs(x="Indicated Breeding Pairs", y="Nests", title="All years")
+# print(p1)
+# #ALL Estimates
+# plot(df$ibp, df$NdNests, pch=16, cex=1.5, xlim=c(0, 1000), ylim=c(0, 3000), 
+#      xlab="Aerial Pairs", ylab="Nests")
+# arrows(x0=df$ibp, x1=df$ibp, y0=df$NdNests-df$sddNests, y1=df$NdNests+df$sddNests, length=0)
+# arrows(x0=df$ibp-df$ibp.se, x1=df$ibp+df$ibp.se, y0=df$NdNests, y1=df$NdNests, length=0)
+fit <- lm(df$NdNests~df$ibp-1)
+lmdat <- data.frame(Data = "ALL", Slope=coef(fit), SE=summary(fit)$coefficients[2])
+# abline(lm(df$NdNests~df$ibp-1))
+#########################
+#Figure 4 left panel of Hodges
+df2 <- filter(df, Year <= 1995, n > 3)
+p2 <- ggplot(df2, aes(x=ibp, y=NdNests)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, ymin=lowerN, ymax=upperN)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, xmin=lowerIBP, xmax=upperIBP)) +
+  geom_smooth(method="lm", formula = y~x-1, se=TRUE) +
+  labs(x="Indicated Breeding Pairs", y="Nests", title="1993-1995")
+# print(p2)
+# plot(df2$ibp, df2$NdNests, pch=16, cex=1.5, xlim=c(0, 1000), ylim=c(0, 3000), 
+#      xlab="Aerial Pairs", ylab="Nests")
+# arrows(x0=df2$ibp, x1=df2$ibp, y0=df2$NdNests-df2$sddNests, y1=df2$NdNests+df2$sddNests, length=0)
+# arrows(x0=df2$ibp-df2$ibp.se, x1=df2$ibp+df2$ibp.se, y0=df2$NdNests, y1=df2$NdNests, length=0)
+# abline(lm(df2$NdNests~df2$ibp-1))
+fit <- lm(df2$NdNests~df2$ibp-1)
+lmdat <- rbind(lmdat, data.frame(Data = "1993-1995", Slope=coef(fit), SE=summary(fit)$coefficients[2]))
+#########################
+#Figure 4 right panel of Hodges
+df2 <- filter(df, Year %in% c(1998, 2004, 2007))
+p3 <- ggplot(df2, aes(x=ibp, y=NdNests)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, ymin=lowerN, ymax=upperN)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, xmin=lowerIBP, xmax=upperIBP)) +
+  geom_smooth(method="lm", formula = y~x-1, se=TRUE) +
+  labs(x="Indicated Breeding Pairs", y="Nests", title="1998, 2004, 2007")
+# print(p3)
+# plot(df2$ibp, df2$NdNests, pch=16, cex=1.5, xlim=c(0, 1000), ylim=c(0, 3000), 
+#      xlab="Aerial Pairs", ylab="Nests")
+# arrows(x0=df2$ibp, x1=df2$ibp, y0=df2$NdNests-df2$sddNests, y1=df2$NdNests+df2$sddNests, length=0)
+# arrows(x0=df2$ibp-df2$ibp.se, x1=df2$ibp+df2$ibp.se, y0=df2$NdNests, y1=df2$NdNests, length=0)
+# abline(lm(df2$NdNests~df2$ibp-1))
+fit <- lm(df2$NdNests~df2$ibp-1)
+lmdat <- rbind(lmdat, data.frame(Data = "1998, 2004, 2007", Slope=coef(fit), SE=summary(fit)$coefficients[2]))
+#########################
+#Figure 5 of Hodges
+df2 <- filter(df, Year <= 2007 & Year != 2001, n > 3)
+p4 <- ggplot(df2, aes(x=ibp, y=NdNests)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, ymin=lowerN, ymax=upperN)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, xmin=lowerIBP, xmax=upperIBP)) +
+  geom_smooth(method="lm", formula = y~x-1, se=TRUE) + 
+  labs(x="Indicated Breeding Pairs", y="Nests", title="1993-95, 1998, 2004, 2007")
+# print(p4)
+# plot(df2$ibp, df2$NdNests, pch=16, cex=1.5, xlim=c(0, 1000), ylim=c(0, 3000), 
+#      xlab="Aerial Pairs", ylab="Nests")
+# arrows(x0=df2$ibp, x1=df2$ibp, y0=df2$NdNests-df2$sddNests, y1=df2$NdNests+df2$sddNests, length=0)
+# arrows(x0=df2$ibp-df2$ibp.se, x1=df2$ibp+df2$ibp.se, y0=df2$NdNests, y1=df2$NdNests, length=0)
+# abline(lm(df2$NdNests~df2$ibp-1))
+fit <- lm(df2$NdNests~df2$ibp-1)
+lmdat <- rbind(lmdat, data.frame(Data = "1993-2007 (not 2001)", Slope=coef(fit), SE=summary(fit)$coefficients[2]))
+#########################
+#Last two years
+df2 <- filter(df, Year >= 2010)
+p5 <- ggplot(df2, aes(x=ibp, y=NdNests)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, ymin=lowerN, ymax=upperN)) + 
+  geom_pointrange(aes(x=ibp, y=NdNests, xmin=lowerIBP, xmax=upperIBP)) +
+  geom_smooth(method="lm", formula = y~x-1, se=TRUE) +
+  labs(x="Indicated Breeding Pairs", y="Nests", title="2010, 2016")
+# print(p5)
+# plot(df2$ibp, df2$NdNests, pch=16, cex=1.5, xlim=c(0, 1000), ylim=c(0, 3000), 
+#      xlab="Aerial Pairs", ylab="Nests")
+# arrows(x0=df2$ibp, x1=df2$ibp, y0=df2$NdNests-df2$sddNests, y1=df2$NdNests+df2$sddNests, length=0)
+# arrows(x0=df2$ibp-df2$ibp.se, x1=df2$ibp+df2$ibp.se, y0=df2$NdNests, y1=df2$NdNests, length=0)
+# abline(lm(df2$NdNests~df2$ibp-1))
+fit <- lm(df2$NdNests~df2$ibp-1)
+lmdat <- rbind(lmdat, data.frame(Data = "2010-2016", Slope=coef(fit), SE=summary(fit)$coefficients[2]))
+
+# #why exclude 2001?
+df2 <- filter(df, Year == 2001)
+# points(df2$ibp, df2$NdNests, pch=2, cex=1.5, col=1)
+
+p3 <- p3 + geom_point(data=df2, shape=2)
+p4 <- p4 + geom_point(data=df2, shape=2)
+
+p <- ggarrange(p2, p3, p4, p5, ncol=2, nrow=2, labels=LETTERS[1:4])
+print(p)
+```
+
+```{r plotall, fig.cap="Strata-specific nest plot estimates against aerial survey estimates (black dots with 2 SE bars indicated by the black line) for all years and nest plot strata. Blue line and gray band is the expectation and 95% confidence interval ofor the response, respectively, based on a no-intercept regression."}
+p1 <- p1 + annotate("text", x=100, y=3500, label=paste("Slope = ", round(lmdat[1,2],2)))
+print(p1)
+```
+
+
+```{r hogestable}
+options(knitr.kable.NA = '-')
+lmdat <- data.frame(lmdat, "Slope1" = c(NA, 3.42, 3.15, 3.39, NA), 
+                    "SE1"=c(NA, 0.21, 0.26, 0.17, NA))
+knitr::kable(lmdat, digits=2, row.names=FALSE, caption = "Linear regression parameter estimates between Dusky Canada Goose nest estimates and aerial survey estimate in the nest plot strata as calculate here (Slope and SE) and those originally reported in Hodeges and Eldridge (2007, Slope1 and SE1).")
+options(knitr.kable.NA = '')
+```
+
+<!-- The above regression were performed on the point estimate of nest number and aerially observe geese for each nest plot strata. Because they are estimates, a repeated sample of nest plots or aerial observations could produce different results, as both the predictor and response variables are random. Linear regression assumes that the predictor variable is measured without error, or at least in practice that the error is much smaller than the response. In general, measurement error in the predictor will bias the slope parameter In order to assess the role of error in the predictors Does the variance in the estimate affect the regression estimate (error-in-covariates)? Try a bootstrap. -->
+
+```{r bootratio, eval=FALSE}
+#How does estimate variation effect the ratio estimate?
+cv=estimates$sdEst/estimates$mEst
+cv.st = stEst$sddNests/stEst$NdNests
+#bootstrap the regression estimate over the uncertainty in nests and air estimates
+df <- df[!is.na(df$NdNests),]
+n.boot <- 10000
+Nreps <- MASS::mvrnorm(n.boot, df$NdNests, diag(df$vdNests))
+Areps <- MASS::mvrnorm(n.boot, df$ibp, diag(df$ibp.var))
+results <- c()
+for(i in 1:n.boot){
+  results[i] <- lm(Nreps[i,]~Areps[i,]-1)$coefficients
+}
+mean(results)
+sd(results)
+#compare to no bootstrap
+#summary(lm(df$NdNests~df$ibp-1))
+```
+
+## c. Estimate of change in air-to-ground effect
+
+We used several approaches to estimate a change in the air-to-ground ratio. We first used two linear models to predict strata-specific point estimate of nest density as a function of year and strata-specific point estimate from the air data (indicated breeding pairs, as in the Section above). We treated year as continuous variable in one model with an effect for indicated breeding pairs and an interaction between indicated pairs and year. This estimates a constant linear effect of the air-to-ground estimate and continuous linear change in the indicated pair effect with time. We also fit a similar model but treated year as a factor to examine year-specific air-to-ground effects and to allow for variation in the change in the air-to-ground effect across years. In each case we used a model with an intercept and 1993 as the reference year. Second, we use a generalized additive mode to examine the relationship between counts of nests on plots and the srata-specific indicated pair density and year. These models are similar to the linear model above, but the response is the count of the number of nest found on a plot and instead of just a straight-line functional relationship for indicated pairs or year, any smooth function is allowed and the complexity ('wiggliness') of the function is determined as part of the model optimization step. We included models with only an effect of indicated pairs and no-intercept (Model 1, Table 4); an effect of indicated pairs and an intercept (models 2); a effect of indicated pairs and a factor effect of year (Model 3); an effect of indicated pairs and a smooth function of year (model 4), an effect of indicated pairs, a smooth function of year, and a smooth function interaction between indicated pairs and year (Model 5); an year-specific smooth function of indicated pairs and a year-specific intercept (model 6); and a model with an intercept and a smooth function of the interaction between indicated pairs and year (Model 7). In all cases, we specific a negative binomial likelihood for the response. We then fit the models using the R package `mgcv` (Wood 2021) and used Akaike information criterion (AIC) to assess fit of the models. Note that the response is on the scale of a counts of nest on a plot but the predictor is the point estimate of indicated pairs over the entire stratum, as is used for the predictor above and in the original results of Hodges and Eldridge (2007). We want to to fit model that used nest plot-specific estimates of indicated pairs using predictions from the model above (figure 7) but at the time of this writing, data associating counts of nest on plots to plot location was not available. Because we could not use these plot location data, the current approach suffers from the 'ecological fallacy' where average covariate values over an areal unit (stratum-specific indicated pair estimates) are applied to 
+
+Table 4 shows the results of the linear models for the stratum-specific responses and predictors. There appears to be a small trend for a declining effect of indicated pairs with time, although the estimated effect is most likely small ($-0.05 \pm 0.06$ 2SE, Table 4). In the model that treated year as a factor, most years had a similar relationship between nests and indicated pairs (Table 4). In the later years (2004, 2007, and 2016 with the exception of 2010), there was a tendency for a reduced effect of indicated pairs on nest number (Table 4). Notably, the effect was largest in 2016 ($-1.56 \pm 1.44$ 2 SE), which is the first year in this data set that the biased aerial design was implemented. Given that the bias results in higher aerial design-based estimates, the bias is expected to produce a reduced slope between nests and indicated pairs as is shown in the model results.  
+
+```{r change1}
+#change with year?
+df$cYear <- df$Year - 1993
+m1 <- summary(lm(NdNests~ibp+ibp:cYear, data=df))
+#summary(lm(NdNests~ibp+cYear+ibp:cYear-1, data=df))
+#anova(lm(NdNests~ibp+ibp:cYear-1, data=df))
+
+#year as factor
+df$fYear <- factor(df$Year)
+m2 <- summary(lm(NdNests~ibp+ibp:fYear, data=df))
+#summary(lm(NdNests~ibp+fYear+ibp:fYear, data=df))
+#anova(lm(NdNests~ibp+ibp:fYear, data=df))
+
+mtable <- cbind(
+  data.frame(
+    Model = c("Nests ~ IBP + IBP:Year", NA, NA, "Nests ~ IBP + IBP:factor(Year)", rep(NA, 9)),
+              Parameter=c("Intercept", "IBP", "IBP:Year", "Intercept", "IBP", "IBP:1994", "IBP:1995", 
+                          "IBP:1998", "IBP:2001", "IBP:2004", "IBP:2007", "IBP:2010", "IBP:2016")
+    ),
+  rbind(as.data.frame(m1$coefficients, row.names = FALSE), as.data.frame(m2$coefficients, row.names=FALSE))
+)
+knitr::kable(mtable, digits=3, row.names=FALSE, caption="Result from fitting two linear model to predict nest number in nest plot strata (Nests) as a function of year (Year) and aerial observer indicated pairs (IBP). The first model treated year as a continuous linear effect and a second model treated year as a factor. In both models, 1993 is the reference year.")
+```
+
+Table 5 shows the results of fitting generalized additive models directly to counts of nests found on a plot. The best fitting model (models 4, Table 5) included a smooth term for indicated pairs and year. The next best-fitting model had essentially identical fit and only include a tern for indicated pairs (Model 2, Table 5). Following these two model was a model that included terms smooth terms for indicated pairs, year, and the interaction between indicated pairs and year (model 5). Given the difference in AIC of approximate 2 unit, this indicates only very weak evidence for an change in the effect of indicated pairs with year. All other model had larger differences in AIC and can be largely ignored.  
+
+```{r plotgams}
+#try a GLM directly on nest plot data
+#below uses west delta nest plot strata for air estimates as covariate, 
+#GAM checking was done outside of knitr
+library(mgcv)
+df2 <- left_join(nests, df)
+df2$larea <- log(df2$Plot_area)
+#put covariate on same scale - density
+df2$dibp <- df2$ibp/df2$Strata_area
+#head(df2)
+fit0 <- gam(Nests~dibp-1, offset=larea, family=nb, data=df2)
+#summary(fit0)
+fit1 <- gam(Nests~s(dibp), offset=larea, family=nb, data=df2)
+#summary(fit1)
+#plot(fit1)
+fit2 <- gam(Nests~s(dibp)+fYear, offset=larea, family=nb, data=df2)
+#summary(fit2)
+#plot(fit2)
+fit3 <- gam(Nests~s(dibp)+s(cYear, k=4), offset=larea, family=nb, data=df2)
+#summary(fit3)
+#plot(fit3, select=1)
+#plot(fit3, select=2)
+fit4 <- gam(Nests~s(dibp)+s(cYear, k=4)+ti(dibp, cYear, k=4), offset=larea, 
+            family=nb, data=df2)
+#summary(fit4)
+#plot(fit4, select=1)
+#plot(fit4, select=3, scheme=2, too.far=0)
+fit5 <- gam(Nests~s(dibp, by=fYear)+fYear, offset=larea, 
+            family=nb, data=df2)
+#summary(fit5)
+#plot(fit5, pages=1, scale=0)
+fit6 <- gam(Nests~s(dibp, cYear, k=4), offset=larea, 
+            family=nb, data=df2)
+#summary(fit6)
+Model = c("(1) Nests~dibp-1", "(2) Nests~s(dibp)", "(3) Nests~s(dibp)+factor(Year)", 
+          "(4) Nests~s(dibp)+s(Year)", 
+          "(5) Nests~s(dibp)+s(Year)+ti(dibp, Year)", "(6) Nests~s(dibp, by=factor(Year))+factor(Year)", 
+          "(7) Nests~s(dibp, Year)")
+knitr::kable(data.frame(Model=Model, AIC(fit0, fit1, fit2, fit3, fit4, fit5, fit6)), digits=2, row.names=FALSE, 
+             caption="Akaike information criterion (AIC) for each generalized additive model fit to nest plot data. 'Model' is the model structure that follows the R and mgcv formula syntax, and 'df' is the model effective degrees of freedom. In the model sytax, 's(.)' means a smooth function of the covariate in the parenthases, 'factor(.)' mean the covariate is treated as a catagorical factor, 'by' indicates that a separate smooth is fit to each level of the factor, smooth two-dimentional function (interactions) are indicated with mulitple terms inside a parenthasis, and 'ti(.)' is used to indicate a multiple dimentional smooth (interaction) that excludes the lower-order ('main effect') smooths.")
+```
+
+Figure 10 shows the results of the best fitting generalized additive model (model 4). Note the non-linear functional effect for indicated pairs on the log scale, where the slope declines with increasing indicated pairs (Figure 10A). For the effect of year, the model reduced the effect to a simple linear form on the log scale with a small slope (B), consistent with the results above for the linear models (Table 4). When the effect of indicated pairs is plotted on the response scale (number of nest per kilometer square), the non-linear effect is more pronounced with a rapid increase at low density and then a slower increase at higher densities (figure 10C). To illustrate this more clearly, the first derivative of the smooth of indicated pairs is shown in figure 10 (D). As can be seen, the greatest increase in nest density is at intermediate densities of indicated pairs and lower rates of change at low and high densities. 
+
+```{r plotgam, fig.cap="Results for the best fitting generalized additive model predicting nests found on ground plots as a smooth function of year and indicated breeding pair density observed from the air in the stratum that the nest plot is located. In (A) the log-scale non-linear smooth effect of aerial indicated breeding pair density is shown by the thin black line. In (B) the log-scale linear effect of year is shown. In (C) the smooth effect is shown on the response scale (number of nests in one square kilometer). In (D) the derivative (slope) of the response-scale smooth is shown. Partial residuals are indicated by the points, and uncertainty (2 standard errors) of the smooth is shown by the gray polygon."}
+par(mfrow=c(2,2))
+plot(fit3, select=1, residuals=TRUE, xlab="Indicated Breeding Pair Density", ylab="Smooth effect", 
+     shade=TRUE, seWithMean=TRUE, rug=FALSE)
+mtext("A", adj=0, font=2)
+plot(fit3, select=2, residuals=TRUE, xaxt="n", xlab="Year", ylab="Smooth effect", 
+     shade=TRUE, seWithMean=TRUE)
+axis(side=1, at=seq(0,20, by=5), labels = seq(1993, 2016, by=5))
+mtext("B", adj=0, font=2)
+delta=0.01
+x=seq(0, 14, by=0.1)
+a <- predict(fit3, newdata=data.frame(dibp=x, cYear=0), type="response", se.fit=TRUE)
+b <- predict(fit3, newdata=data.frame(dibp=x+delta, cYear=0), type="response", se.fit=TRUE)
+slope <- (b$fit-a$fit)/delta
+plot(x, a$fit, type="l", xlab="Indicated Breeding Pair Density", ylab="Nests")
+#lines(x, a$fit+2*a$se.fit, lty=2)
+#lines(x, a$fit-2*a$se.fit, lty=2)
+polygon(x=c(x,rev(x)), y=c(a$fit+2*a$se.fit, rev(a$fit-2*a$se.fit)), col="gray75", border=NA)
+lines(x, a$fit, lty=1)
+mtext("C", adj=0, font=2)
+plot(x, slope, type="l", xlab="Indicated Breeding Pair Density", ylab="d(Nests)/d(IBP)")
+mtext("D", adj=0, font=2)
+par(mfrow=c(1,1))
+```
+
+```{r meandev}
+#calculate mean derivative
+a <- predict(fit3, newdata=data.frame(dibp=df2$dibp, cYear=df2$cYear), type="response")
+b <- predict(fit3, newdata=data.frame(dibp=df2$dibp+0.01, cYear=df2$cYear), type="response")
+meandf <- mean((b-a)/delta, na.rm=TRUE)
+meandf
+```
+
+
+
+```{r plotgam2, fig.cap="Plot of the interaction between year and indicated breeding pair density on the expected number of Dusk Canada Goose nests found on a plot. Note that the interaction is dominated by only a few observations at high indicated pair density."}
+vis.gam(fit4, view=c("dibp", "cYear"), type="response", plot.type = "contour", color = "terrain", xlab="Indicated Breeding Pair Density", ylab="Years from 1993", main="Nest Density")
+points(df2$dibp, df2$cYear, pch=16)
+```
+
+```{r airdenVplots, fig.cap="Nest plot strata overlaid on the expected density (per kilometer square) of Dusky Canada Goose from a model based on the aerial survey data in 2019. Note that the nest plot strata are not closely related to goose density such that many strata contain both regions of high and low density."}
+
+df <- bind_cols(data.frame(Density=preds1, Observer=obscode[1]), predpoints)
+df <- filter(df, STRATNAME %in% c("West Delta", "Egg Island"))
+df <- st_as_sf(df)
+plotareas <- filter(plotareas, Period=="1998-2016")
+p <- ggplot() + 
+  geom_sf(data=df, aes(color=Density, fill=Density), shape=22, size=4.5) +
+  scale_fill_gradientn(colours = terrain.colors(7)) + 
+  scale_color_gradientn(colours = terrain.colors(7)) + 
+  geom_sf(data=plotareas, fill=NA) +
+  theme_minimal() + 
+  theme(axis.title=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank())
+print(p)
+```
+
+## d. Applying the air-to-ground ratio
+
+In this section we propose a way to apply the air-to-ground ratio and discuss some consideration in doing so.
+
+Which ratio? total, strata-specific, plot specific?
+
+Expected interval or prediction interval?
+
+Average across years or or year-specific prediction interval?
+
+All years, or just those since a biased design was implemented?
+
+show calculation of one or more ways, compare to current calculation. 
+
+# 5. Recommendations and conclusions
+
+1. Manage data and document methods
+2. simplify management index, either to measure nests or total birds in a defined area
+3. if current index is maintained, measure nest detection rates each year. Switch to distance sampling across the same area as the aerial survey. Reevaluate renesting rate $R$. Explore other methods than simple linear regression to estimate $\beta$. 
+4. For the aerial survey explore model-based estimates of the population to remove observer- and design-bias. Estimate aerial observer detection rate to remove bias associate with observer-specific detection.   
+5. 
+
+# References
