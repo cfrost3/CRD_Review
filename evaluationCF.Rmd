@@ -7,12 +7,14 @@ output:
     fig_caption:  true
     toc: true
 bibliography: bibliography.bib
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE)
 options(knitr.kable.NA = '')
 library(AKaerial)
+library(kableExtra)
 library(mgcv)
 library(dplyr)
 library(bbmle)
@@ -321,9 +323,13 @@ print(p)
 
 # 3. Evaluation of aerial survey
 
-**Chuck, insert aerial survey introduction/description**
-**include description of survey history and switch to biased design**
-**Also include navigation accuracy and how that has changed through time, + any other important details**
+
+The USFWS-Alaska Region Migratory Bird Management program conducts an annual (when possible) survey of dusky Canada geese and trumpeter swans (_Cygnus buccinator_) on the Copper River Delta near Cordova, Alaska. The survey is timed in mid-May to coincide with melting snow and ice cover, early nesting period for dusky Canada geese, and reduced green vegetation to allow for increased detection [@marks2019].  The specific objective of the survey is to estimate abundance of dusky Canada geese and trumpeter swans breeding on the Copper River Delta and nearby islands, though, at least in recent years, some effort has been made to quantify the abundance of cackling Canada geese (_Branta hutchinsii_) along flight lines.  What follows is a brief history of the survey, description of the current design and methodology, potential sources of bias in the methodology taken from unpublished annual reports that were discoverable and available at the time of this report, and finally an evaluation of an alternative method of population estimation using a model-based approach.
+
+## a. Survey history
+
+Surveys of the Copper River Delta were initiated in the 1970s by the Alaska Department of Fish and Game (ADFG) to address an apparent decline in the breeding population of dusky Canada geese, hypothesized to be caused by habitat loss or change following the Good Friday Earthquake in 1964 [@conant1987; @butler1991].  The USFWS took over the survey in 1983 and continued to survey the West Delta stratum until 1990.  A concurrent expanded survey (with helicopter surveys for detection estimation) was initiated in 1986 by the USFWS to survey 5 strata: West Delta (broken into coastal, intermediate, and upland portions), Egg Island, and East Delta.  These 2 surveys ran in parallel from 1986-1990 (with some minor changes in transect design and coverage) before the 5-strata expanded survey was chosen to replace the original survey [@butler1991].  The replacement survey underwent a design shift in 1997 from 5 strata to 8, further subdividing the West Delta into 5 distinct strata based on habitat classification, and also altered design transects slightly to the version that are still used currently [@eldridge1998].  At some point before 2007, the analysis approach pooled the 5 strata of the West Delta into 1, resulting in the current 3-strata design: West Delta, East Delta, and Egg Island (Figure 4).  
+
 
 ```{r airsurveyarea, fig.cap="Copper River Delta aerial survey strata (colored polygons) and transects (black lines) for 2016. Note that in the two island areas, the transects extend beyound the survey area and in the western and eastern parts of the study area, transects do not extend to the study area boundary, inducing a biased sample of the survey area."}
 # coast data, just for reference
@@ -351,7 +357,74 @@ p <- ggplot() +
 print(p)
 ```
 
-The resulting estimates for Dusky Canada Goose indicated breeding pairs. **Chuck, expand and explain estimates**
+
+One notable alteration to the 1997 design transects occurred in 2014, when lines in the far west portion of the West Delta and far east portion of the East Delta were shortened due to safety concerns involved with turning the plane so close to mountains.  This resulted in a change in design transects only, and created an unsampled area of low density  of just under 10% in each stratum.  This change, coupled with no corresponding change in the design stratification, has been shown to overestimate (bias) the aerial component of the management index by 3-13% [@stehn2014; this paper].  
+
+The Pacific Flyway Council has also shifted the method of determining the management index for duskies over the same period [@pfc2008].  Photo composition counts in the Pacific Northwest were used from 1981-1995, followed by mark-recapture estimates derived using observations on wintering grounds from 1995-2007 [@shaeffer1993], and finally the current composite management index (see section 1 above) from 2007-current.
+
+## b. Current survey design and methodology
+
+The current combination of design strata and design transects (Figure 4) has been used since 2014, but has been very similar throughout the recent history of the survey (1997-current).  USFWS personnel (in general, a left-seat pilot-observer and right-seat observer) fly an amphibious Cessna 206 approximately 35-45m in altitude and 160km/h along the strip transects and search out to a horizontal distance of 200m, recording observations of dusky Canada geese, cackling Canada geese, trumpeter swans, and trumpeter swan nests [@marks2019].  Observations are collected as a series of voice recordings with GPS locations that are transcribed into text files.  Track files (plane coordinates) are continuously recorded but not used in the current analysis.
+
+The current design results in a very high sampling fraction (Table 1).  Sampling fraction is an estimate of the proportion of the population that is currently sampled, and values around 0.10-0.20 are generally considered adequate in ecological studies.  
+
+```{r spatialsummary}
+
+strata.summary = AKaerial::StrataSummary(strata.file="Data/CRD_2018_DesignStrata.shp")
+
+trans = AKaerial::SplitDesign(strata.file="Data/CRD_2016_Transects.shp", area="CRD")
+
+trans = as.data.frame(trans) %>% group_by(STRATNAME) %>% summarise(m=length(unique(SPLIT)), s.area=sum(len)*.4)
+
+names(strata.summary)[1]="STRATNAME"
+
+spatial.summary = left_join(strata.summary, trans) %>%
+  mutate(fraction = s.area/layer.area) %>%
+  select(STRATNAME, layer.area, s.area, fraction, m) %>%
+  mutate(spacing = c(1.85, 0.78, 0.93))
+
+spatial.summary[,c(2,3,4)] = round(spatial.summary[,c(2,3,4)],2)
+
+
+kableExtra::kable(spatial.summary,
+                  col.names = c("Stratum", "Area (sq. km)", 
+                      "Sampled Area (sq. km)", "Sampling Fraction", "Transects", "Spacing (km)"),
+        caption = "Summary of 2014-2019 Copper River Delta survey design.")
+```
+
+Individual observations are classified as: 
+
+ - Single: one lone goose.
+ - Pair: two geese in close association or generally considered to be paired up.
+ - Open: 3 or more geese in close association that can't be differentiated into pairs.
+ 
+Recorded observations are clipped spatially to the boundaries of the study area since the transect design appears to intentionally sample "out of area" habitat and inclusion of these observations would bias the survey low or high, depending on the observed density (Figure 4).  Design transect lengths are also trimmed for the same reason.  
+ 
+A ratio estimator [@cochran1977] is employed in the R package AKaerial [@frost2020] to estimate the density of birds on the study area.  Observations and sampled areas are summed across transects within each stratum to produce strata-specific density estimates.  These densities are then multiplied by associated strata areas to produce stratum-specific population indices that are summed to produce the overall aerial component of the breeding population index.  
+
+$$E[\hat Y] = \displaystyle\sum_{i}^{S} \frac{\bar y_i}{\bar a_i} A_i = \displaystyle\sum_{i}^{S} \hat D_i A_i$$
+where $y_i$ are observations and $a_i$ are sampled areas in strata $i$ and 
+$$A_i = \displaystyle\sum_{j}^{M_i} a_{ij}.$$ 
+with estimated variance from Williams et al. [-@williams2002] 
+$$Var(\hat Y) = \displaystyle\sum_{i}^{S} M_i^2 \frac{(1-m_i / M_i)}{m_i} ( s^2_{iy} + \hat {D^2}_i s^2_{ia} - 2 \hat {D_i} s_{iay} ),$$
+where $m_i$ and $M_i$ are the number of sampled and total plots in strata $i$, respectively, and there are $S$ total strata; 
+$$s^2_{ix} = \displaystyle\sum_{j}^{m_i} (x_{ij} - \bar x )/(m_i -1), $$
+
+However, the indices produced are not just the total counts of geese and swans since it is assumed that a single bird is indicative of a breeding pair and the mate is unseen on a nest, so singles are doubled when computing IBB and ITB.  The reported estimates are augmented as below and reported to the Pacific Flyway Council (Table 2; Figure XX):
+
+  - Indicated Breeding Birds (IBB): $$2(E[\hat Y{single}] + E[\hat Y{pair}])$$
+  - Indicated Total Birds (ITB): $$2(E[\hat Y{single}] + E[\hat Y{pair}]) + E[\hat Y{open}]$$
+  
+
+  
+```{r estimatesTable}
+
+ReportTable(data=CRDHistoric$combined, species="DCGO", year = c(1986:2019), index = c("itotal", "itotal.var", "ibb", "ibb.var"), cap="Indicated total (ITB) and indicated breeding (IBB) dusky Canada geese on the Copper River Delta, 1986-2019", new.names=c("Year", "ITB", "SE", "IBB", "SE"), yr.avg=0, missing=2013)
+
+
+
+```
+
 
 ```{r airobs, fig.cap="Estimated number of Dusky Canada Goose indicated breeding birds in the Copper River Delta aerial survey area for each observer (top) and for the average of observers in each year (bottom)."}
 Combined <- filter(CRDHistoric$combined, Species=="DCGO") %>% 
@@ -374,7 +447,137 @@ gplot <- ggplot() +
 print(gplot)
 ```
 
-## a. Model-based observer and year effects
+
+## c. Potential sources of bias or concern in current methodology
+
+  -The most recent report [@marks2019] and most or all past reports cite [@cws1987] as the field protocol for the observation process.  This protocol does not mention geese or swans or how to record observations for monomorphic species in general.  The result has been confusion during staff turnover periods and inconsistent treatment of observations over the history of the survey.  Specific points of contention include: 
+    1. How to determine "close association" for singles, pairs, and flocks.
+    2. When to include or when to ignore flying geese.
+    3. When to include a bird with or on a nest.  
+    
+  The USFWS and CWS [-@cws1987] protocol states that flying birds are only counted if they took flight from a location within the strip transect sampled area and birds on a nest should be ignored since they are considered the mate of a bird that was observed.  Anecdotal notes and reports have revealed an inconsistent treatment of both of the above cases throughout the survey. 
+    
+  -An extension of (1) above is the treatment of differentiating flocks into singles and pairs throughout the history of the survey.  For example, a flock of 40 is observed by observer A and recorded as "open 40."  A flock of 40 is later observed by observer B and recorded as "pair 20" due to personal interpretation of the "close association" and "generally paired up" terminology.  This would not be a substantial issue in an unadjusted population index since 20 pairs would be doubled and enter the composite index as 40 birds.  In the current management index for dusky Canada geese (see above), however, 20 pairs would be both doubled and adjusted for detection (since they are pairs, and thus indicated breeding birds) and enter the composite index as 20 x 2 x 3.34 = 134 geese instead of 40.  This is illustrated in the historical data, as the frequency of calling multiple pairs in one observation has gone from almost nonexistent from 1986-2010, to more frequently than calling flocks in recent years (Figure 5).  This observation process is likely biasing the _adjusted_ breeding ground index high in recent years, or low in historic years.  
+
+```{r obstype, fig.cap="Frequency of observation types for dusky Canada geese on the Copper River Delta survey, 1986-2019.  An observation of 'open' indicates a flock, while 'multiple pairs' refers to the probable decomposition of a flock into several pairs, which, when adjusted for detection, will result in a biased population index."}
+
+data=read.csv("Data/CRD_Panel_Summary_Observation.csv", header=TRUE, stringsAsFactors = FALSE)
+
+data %>% filter(Num>1) %>% filter(Obs_Type %in% c("open", "pair")) %>%
+  ggplot(aes(x=Year, fill=Obs_Type)) + 
+  geom_bar() +
+  scale_fill_grey() +
+  labs(x="Year", y="Frequency") +
+  scale_fill_discrete(name = "Observation Type", labels = c("Open", "Multiple Pairs")) +
+  theme_bw() 
+
+```
+ 
+```{r speciesid, fig.cap="Indicated total (2(singles + pairs) + flocks) dusky Canada geese (DCGO) and cackling Canada geese (CCGO) on the Copper River Delta, 1986-2019."}
+
+
+samp = (CRDHistoric$combined[CRDHistoric$combined$Species %in% c("DCGO", "CCGO"), c(1,2,6,8)])
+samp  %>%
+  ggplot(aes(x=Year, y=itotal, color=Species)) + 
+  geom_ribbon(aes(ymin=pmax(0,(itotal - 1.96*itotal.se)), ymax=itotal + 1.96*itotal.se, fill=Species), alpha=.5) +
+  geom_line() +
+  labs(x="Year", y="Indicated Total") +
+  theme_bw()
+
+ccgo = CRDHistoric$combined[CRDHistoric$combined$Species == "CCGO", c(1,2,3)]
+
+
+```
+
+  -Subspecies identification was not addressed or consistently attempted in the early years of the surveys and it is unknown if and when consistent attempts to differentiate dusky from cackling Canada geese [@conant1987; Figure 6].  Anecdotal observations of large mixed flocks in survey notes would lead us to believe that there is unknown bias associated with subspecies identification throughout the history of the survey.  Cackling Canada geese have been recorded in substantial numbers since the 2007 index change (mean = `r round(mean(ccgo$total[ccgo$Year >= 2007]),0)`, SD = `r round(sqrt(var(ccgo$total[ccgo$Year >= 2007])),0)`) as compared to before (mean = `r round(mean(ccgo$total[ccgo$Year < 2007]),0)`, SD = `r round(sqrt(var(ccgo$total[ccgo$Year < 2007])),0)`).  This difference could be attributed to phenology, but it could also be the result of inconsistent subspecies identification effort by observers.  
+   
+  -The removal of portions of transects (discussed above) in 2014 artificially inflates the population estimate of dusky Canada geese on the study area [@stehn2014; this paper].  By removing areas where geese are found in lower than average density, but not also moving the corresponding study area boundaries to account for the now unsampled area, the average densities of the appropriate strata layers is inflated and extrapolated into a larger and inappropriate area.  This bias was quantified by Stehn [-@stehn2014] to be between 3-5.5% when applied backwards to 1986-2012 and in this paper at 13% for 2016-2019.
+   
+  -The study area appears to be sampled at an unnecessarily high sampling fraction.  The current design of the survey results in an overall sampling fraction of 0.32 across all strata.  The resulting level of precision is not necessary or used as part of the management index.  We simulated a reduction in effort of 50%, 66%, and 75% (retaining every other transect, every 3rd transect, or every 4th transect) and mean predicted coefficients of variation (CV) from a linear model were under 0.20 for all levels of effort (Figures X and Y).    
+   
+```{r cvcalcs, fig.cap="Coefficient of variation of indicated breeding (2(singles + pairs)) dusky Canada geese by sample size for full effort (current design, 40-60 transects) and reduced effort (less than 30 transects) for the Copper River Delta survey, 1986-2019"}
+
+expand.combined=read.csv("Data/expand.combined.csv", header=TRUE, stringsAsFactors = FALSE)
+
+expand.observer=read.csv("Data/expand.observer.csv", header=TRUE, stringsAsFactors = FALSE)
+
+
+expand.observer = expand.observer %>% filter(Species == "DCGO", m>1) %>%
+  select(strata, Year, Observer, total.area, density.ibb, density.flock, ibbtotal.est, flock.est, var.Nib, var.Nflock, sample, iteration,m) %>%
+  mutate(ibb.se = sqrt(var.Nib), cv=ibb.se/ibbtotal.est)
+
+year.m = expand.observer %>% ungroup() %>%
+  group_by(Year, Observer, sample, iteration) %>%
+  summarise(obs.m = sum(m)) %>%
+  ungroup() %>%
+  group_by(Year, sample, iteration) %>%
+  summarise(m = max(obs.m))
+
+expand.combined = expand.combined %>% filter(Species == "DCGO") %>%
+  select(Year, ibb, flock, ibb.var, flock.var, sample, iteration) %>%
+  mutate(ibb.se = sqrt(ibb.var), ibb.cv=ibb.se/ibb, flock.se = sqrt(flock.var), flock.cv=flock.se/flock) %>%
+  filter(ibb.cv > 0.001, flock.cv > 0.001)
+
+expand.combined = left_join(expand.combined, year.m)
+
+
+
+#### CV curves
+
+##CV by sample size for indicated breeding birds (2(S+P))
+
+ibb.lm = lm(log(ibb.cv)~m, data=expand.combined)
+
+new.m= data.frame("m"=seq(0,60,by=1))
+
+ibb.pred <- exp(predict.lm(newdata=new.m, ibb.lm, interval = "prediction" ))
+new.vals=data.frame("m"=new.m$m, "fit"=ibb.pred[,1], "lwr"=ibb.pred[,2], "upr"=ibb.pred[,3])
+
+cv.plot.ibb = expand.combined %>%
+  ggplot(aes(x=m, y=ibb.cv)) +
+  geom_ribbon(data=new.vals, aes(x=m, y=fit, ymin = lwr, ymax = upr), fill = "lightblue", inherit.aes=FALSE) +
+  geom_line(data=new.vals, aes(x=m, y=fit)) +
+  geom_point(size=2) +
+  labs(x="Transects", y="Coefficient of Variation") +
+  theme_bw()
+
+```
+
+```{r cvunadjusted, fig.cap="Coefficient of variation for the unadjusted aerial component (2(singles + pairs) + flocks) of the management index for dusky Canada geese by sample size for full effort (current design, 40-60 transects) and reduced effort (less than 30 transects) for the Copper River Delta survey, 1986-2019}
+
+print(cv.plot.ibb)
+
+##CV by sample size for aerial component of unadjusted breeding ground index (IBB + flocks)
+
+bg.index = expand.combined %>%
+  group_by(Year, sample, iteration) %>%
+  summarise(index = ibb+flock, index.se = sqrt(ibb.var+flock.var), index.cv = index.se/index, m=m)
+
+
+index.lm = lm(log(index.cv)~m, data=bg.index)
+
+index.pred <- exp(predict.lm(newdata=new.m, index.lm, interval = "prediction" ))
+new.vals3=data.frame("m"=new.m$m, "fit"=index.pred[,1], "lwr"=index.pred[,2], "upr"=index.pred[,3])
+
+cv.plot.index = bg.index %>%
+  ggplot(aes(x=m, y=index.cv)) +
+  geom_ribbon(data=new.vals3, aes(x=m, y=fit, ymin = lwr, ymax = upr), fill = "lightblue", inherit.aes=FALSE) +
+  geom_line(data=new.vals3, aes(x=m, y=fit)) +
+  geom_point(size=2) +
+  labs(x="Transects", y="Coefficient of Variation") +
+  theme_bw()
+
+print(cv.plot.index)
+
+
+```
+
+  -The current transect design is incorrect for the design stratification. The multitude of changes to design transects and strata has resulted in a mismatch in the specification of transects within strata (Figure 4).  This would normally not be an issue and instead be cleaned in post-processing, but having to trim the lines and observations to the strata could result in the loss of observations as a result of GPS location error (see below) instead of true "out of area" observations.  One assumption of design-based estimates is that the design lines are appropriate and flown as designed. Some deviation from design is expected, as well as trailing observations (recording an observation late as the plane is turning), but intentionally overlapping design lines prohibit a standard treatment of retaining any trailing observations since they could be truly off design.  
+   
+  -There is an unknown error associated with the spatial locations of the observations.  Survey pilots initially relied on Loran-C navigation systems before changing to Global Positioning System (GPS) locators for determining the locations of observations [@conant1987].  Latitude and longitude fields are of unknown accuracy and might be 500m from the reported locations due to GPS satellite accuracy, distance from the observed bird to the center strip of transect (observer) of up to 200m, and the position of bird with respect to the plane when the location is marked (in front of or behind).  As such, the individual latitude and longitude associated with an observation should be used with caution.  
+
+
+## d. Model-based observer and year effects
 
 In order to present yearly survey estimates that are free of observer effects, we used a generalized linear mixed model to estimate year, observer, and stratum effects on the design-based point estimates of Dusky Canada Goose from the aerial survey. These data are available directly from `AKaerial::CRDHistoric$expanded.table`. We used the R package `mgcv` [@r-mgcv] to implement the mixed model with a fixed effect for strata, and random effects for year and observer and a Tweedie distribution for the likelihood of the response, which was indicated breeding birds for each strata, year, observer combination. We then used the fitted model to predict responses in each year after removing observer effects (i.e., at the mean observer effect of 0) and predict observer effects for each observer in an arbitrary year (2001).  
 
@@ -777,7 +980,7 @@ sd(results)
 
 ## c. Estimate of change in air-to-ground effect
 
-We used several approaches to estimate a change in the air-to-ground ratio. We first used two linear models to predict strata-specific point estimates of nest density as a function of year and strata-specific point estimates from the air (aerial survey) data (indicated breeding pairs, as above). We treated year as continuous variable in one model with an effect for indicated breeding pairs and an interaction between indicated pairs and year. This estimates a constant linear effect of the air-to-ground estimate and continuous linear change in the indicated pair effect with time. We also fit a similar model but treated year as a factor to examine year-specific air-to-ground effects and to allow for variation in the change in the air-to-ground effect across years. In each case we used a model with an intercept and 1993 as the reference year. Second, we use a generalized additive mode to examine the relationship between counts of nests on plots and the srata-specific indicated pair density and year. These models are similar to the linear model above, but the response is the count of the number of nests found on a plot and instead of just a straight-line functional relationship for indicated pairs or year, any smooth function is allowed and the complexity ('wiggliness') of the function is determined as part of the model optimization step. We included models with only an effect of indicated pairs and no-intercept (Model 1, Table 4); an effect of indicated pairs and an intercept (Model 2); a effect of indicated pairs and a factor effect of year (Model 3); an effect of indicated pairs and a smooth function of year (Model 4), an effect of indicated pairs, a smooth function of year, and a smooth function interaction between indicated pairs and year (Model 5); a year-specific smooth function of indicated pairs and a year-specific intercept (Model 6); and a model with an intercept and a smooth function of the interaction between indicated pairs and year (Model 7). In all cases, we specified a negative binomial likelihood for the response. We then fit the models using the R package `mgcv` [@r-mgcv] and used Akaike information criterion (AIC) to assess fit of the models. Note that the response is on the scale of a counts of nest on a plot but the predictor is the point estimate of indicated pairs over the entire stratum, as is used for the predictor above and in the original results of Hodges and Eldridge [-@hodges2007]. We wanted to fit the model that used nest plot-specific estimates of indicated pairs using predictions from the model above (Figure 7) but at the time of this writing, data associating counts of nest on plots to plot location was not available. Because we could not use these plot location data, the current approach suffers from the 'ecological fallacy' where average covariate values over an aerial unit (stratum-specific indicated pair estimates) are applied at the plot level.
+We used several approaches to estimate a change in the air-to-ground ratio. We first used two linear models to predict strata-specific point estimates of nest density as a function of year and strata-specific point estimates from the air (aerial survey) data (indicated breeding pairs, as above). We treated year as continuous variable in one model with an effect for indicated breeding pairs and an interaction between indicated pairs and year. This estimates a constant linear effect of the air-to-ground estimate and continuous linear change in the indicated pair effect with time. We also fit a similar model but treated year as a factor to examine year-specific air-to-ground effects and to allow for variation in the change in the air-to-ground effect across years. In each case we used a model with an intercept and 1993 as the reference year. Second, we use a generalized additive mode to examine the relationship between counts of nests on plots and the srata-specific indicated pair density and year. These models are similar to the linear model above, but the response is the count of the number of nests found on a plot and instead of just a straight-line functional relationship for indicated pairs or year, any smooth function is allowed and the complexity ('wiggliness') of the function is determined as part of the model optimization step. We included models with only an effect of indicated pairs and no-intercept (Model 1, Table 4); an effect of indicated pairs and an intercept (Model 2); a effect of indicated pairs and a factor effect of year (Model 3); an effect of indicated pairs and a smooth function of year (Model 4), an effect of indicated pairs, a smooth function of year, and a smooth function interaction between indicated pairs and year (Model 5); a year-specific smooth function of indicated pairs and a year-specific intercept (Model 6); and a model with an intercept and a smooth function of the interaction between indicated pairs and year (Model 7). In all cases, we specified a negative binomial likelihood for the response. We then fit the models using the R package `mgcv` [@wood2021] and used Akaike information criterion (AIC) to assess fit of the models. Note that the response is on the scale of a counts of nest on a plot but the predictor is the point estimate of indicated pairs over the entire stratum, as is used for the predictor above and in the original results of Hodges and Eldridge [-@hodges2007]. We wanted to fit the model that used nest plot-specific estimates of indicated pairs using predictions from the model above (Figure 7) but at the time of this writing, data associating counts of nest on plots to plot location was not available. Because we could not use these plot location data, the current approach suffers from the 'ecological fallacy' where average covariate values over an aerial unit (stratum-specific indicated pair estimates) are applied at the plot level.
 
 Table 4 shows the results of the linear models for the stratum-specific responses and predictors. There appears to be a small trend for a declining effect of indicated pairs with time, although the estimated effect is most likely small ($-0.05 \pm 0.06$ 2SE, Table 4). In the model that treated year as a factor, most years had a similar relationship between nests and indicated pairs (Table 4). In the later years (2004, 2007, and 2016 with the exception of 2010), there was a tendency for a reduced effect of indicated pairs on nest number (Table 4). Notably, the effect was largest in 2016 ($-1.56 \pm 1.44$ 2 SE), which is the first year in this data set that the biased aerial design was implemented. Given that the bias results in higher aerial design-based estimates, the bias is expected to produce a reduced slope between nests and indicated pairs as is shown in the model results.  
 
